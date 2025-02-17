@@ -1,25 +1,70 @@
+import os
+import cv2
+import numpy as np
 from sklearn.model_selection import train_test_split
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
-# Suppose you have a list of (image, mask) pairs for each class
-benign_data = data['benign']  # List of (image, mask) tuples
-malignant_data = data['malignant']
-normal_data = data['normal']
+def preprocess_image(img, size=(224, 224)):
+    """
+    Resizes the image to `size` and normalizes pixel values to [0,1].
+    For grayscale images, expand dims to get shape (H, W, 1).
+    """
+    # Resize to the desired size
+    img_resized = cv2.resize(img, size)
 
-# Combine them and create labels
-X = benign_data + malignant_data + normal_data  # All image/mask pairs
-y = ([0]*len(benign_data)) + ([1]*len(malignant_data)) + ([2]*len(normal_data)) 
-# 0 = benign, 1 = malignant, 2 = normal (or whichever labeling scheme you prefer)
+    # Convert to float and normalize to [0, 1]
+    img_normalized = img_resized.astype(np.float32) / 255.0
 
-# First split into train+val and test
+    # If it's a single-channel image, expand dims to shape (224,224,1)
+    if len(img_normalized.shape) == 2:
+        img_normalized = np.expand_dims(img_normalized, axis=-1)
+
+    return img_normalized
+
+
+# Example label mapping
+label_map = {
+    'benign': 0,
+    'malignant': 1,
+    'normal': 2
+}
+
+X = []
+y = []
+
+# Iterate over each class label and its (image, mask) pairs
+for label, pairs in data.items():
+    for (img, mask) in pairs:
+        # Preprocess the image
+        processed_img = preprocess_image(img, size=(224, 224))
+        
+        X.append(processed_img)
+        y.append(label_map[label])
+
+# Convert to numpy arrays
+X = np.array(X)
+y = np.array(y)
+
+print("X shape:", X.shape)  # (num_samples, 224, 224, 1) or (num_samples, 224, 224, 3)
+print("y shape:", y.shape)  # (num_samples,)
+
+
+# 1) Split train+val vs test
 X_trainval, X_test, y_trainval, y_test = train_test_split(
-    X, y, test_size=0.15, stratify=y, random_state=42
+    X, y,
+    test_size=0.15,
+    stratify=y,
+    random_state=42
 )
 
-# Then split train+val into train and val
+# 2) Split train vs val
 X_train, X_val, y_train, y_val = train_test_split(
-    X_trainval, y_trainval, test_size=0.15, stratify=y_trainval, random_state=42
+    X_trainval, y_trainval,
+    test_size=0.15,  # 15% of (train+val)
+    stratify=y_trainval,
+    random_state=42
 )
 
-print(f"Train size: {len(X_train)}")
-print(f"Val size:   {len(X_val)}")
-print(f"Test size:  {len(X_test)}")
+print("Train size:", len(X_train))
+print("Validation size:", len(X_val))
+print("Test size:", len(X_test))
