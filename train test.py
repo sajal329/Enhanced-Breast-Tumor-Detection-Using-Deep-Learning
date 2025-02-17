@@ -24,4 +24,9 @@ print(f"Train size: {len(X_train)}")
 print(f"Val size:   {len(X_val)}")
 print(f"Test size:  {len(X_test)}")
 
-##
+def preprocess_image(img, size=(224, 224)):
+    # Resize
+    img_resized = cv2.resize(img, size)
+    # Normalize to 0-1
+    img_normalized = img_resized / 255.0
+    return img_normalized
