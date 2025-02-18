@@ -5,7 +5,7 @@ train_datagen = ImageDataGenerator(
     height_shift_range=0.1,   # shift vertically by 10%
     zoom_range=0.2,           # zoom in/out by 20%
     horizontal_flip=True,     # flip horizontally
-    fill_mode='nearest'       # fill in missing pixels
+    fill_mode='nearest'       # fill in missing pixels#
 )
 
 # For validation and test, we usually do NOT augment, just the same normalization
