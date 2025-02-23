@@ -174,3 +174,45 @@ def build_vgg19_model(input_shape=(224, 224, 3), num_classes=3, freeze_until=17)
     model = models.Model(inputs=base_model.input, outputs=outputs)
     return model
 
+################################################################################
+# 5. TRAIN & EVALUATE VGG16
+################################################################################
+
+vgg16_model = build_vgg16_model(input_shape=(224, 224, 3), num_classes=3, freeze_until=15)
+vgg16_model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+
+print("\n=== VGG16 Model Summary ===")
+vgg16_model.summary()
+
+# Train
+history_vgg16 = vgg16_model.fit(
+    train_generator,
+    epochs=20,  # increase for better results
+    validation_data=val_generator
+)
+
+# Evaluate on test set
+test_loss_vgg16, test_acc_vgg16 = vgg16_model.evaluate(test_generator)
+print("VGG16 Test Accuracy:", test_acc_vgg16)
+
+################################################################################
+# 6. TRAIN & EVALUATE VGG19
+################################################################################
+
+vgg19_model = build_vgg19_model(input_shape=(224, 224, 3), num_classes=3, freeze_until=17)
+vgg19_model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+
+print("\n=== VGG19 Model Summary ===")
+vgg19_model.summary()
+
+# Train
+history_vgg19 = vgg19_model.fit(
+    train_generator,
+    epochs=20,  # increase for better results
+    validation_data=val_generator
+)
+
+# Evaluate on test set
+test_loss_vgg19, test_acc_vgg19 = vgg19_model.evaluate(test_generator)
+print("VGG19 Test Accuracy:", test_acc_vgg19)
+
