@@ -115,3 +115,62 @@ test_generator = test_datagen.flow(
     batch_size=batch_size,
     shuffle=False
 )
+
+################################################################################
+# 4. BUILD VGG16 & VGG19 MODELS (TRANSFER LEARNING)
+################################################################################
+
+def build_vgg16_model(input_shape=(224, 224, 3), num_classes=3, freeze_until=15):
+    """
+    Build a VGG16 model (pretrained on ImageNet) for multi-class classification.
+    freeze_until: number of layers to freeze in the base model (set to None to unfreeze all).
+    """
+    local_weights_path = "/kaggle/input/vgg16/keras/default/1/vgg16_weights_tf_dim_ordering_tf_kernels_notop.h5"
+    
+    base_model = VGG16(
+        weights=local_weights_path,
+        include_top=False,
+        input_shape=input_shape
+    )
+    
+    # Freeze the first `freeze_until` layers
+    if freeze_until is not None:
+        for layer in base_model.layers[:freeze_until]:
+            layer.trainable = False
+    
+    # Build classification head
+    x = layers.Flatten()(base_model.output)
+    x = layers.Dense(256, activation='relu')(x)
+    x = layers.Dropout(0.5)(x)
+    outputs = layers.Dense(num_classes, activation='softmax')(x)
+
+    model = models.Model(inputs=base_model.input, outputs=outputs)
+    return model
+
+def build_vgg19_model(input_shape=(224, 224, 3), num_classes=3, freeze_until=17):
+    """
+    Build a VGG19 model (pretrained on ImageNet) for multi-class classification.
+    freeze_until: number of layers to freeze in the base model (set to None to unfreeze all).
+    """
+    local_weights_path = "/kaggle/input/vgg19/tensorflow2/default/1/vgg19_weights_tf_dim_ordering_tf_kernels_notop.h5"
+    
+    base_model = VGG19(
+        weights=local_weights_path,
+        include_top=False,
+        input_shape=input_shape
+    )
+    
+    # Freeze the first `freeze_until` layers
+    if freeze_until is not None:
+        for layer in base_model.layers[:freeze_until]:
+            layer.trainable = False
+    
+    # Build classification head
+    x = layers.Flatten()(base_model.output)
+    x = layers.Dense(256, activation='relu')(x)
+    x = layers.Dropout(0.5)(x)
+    outputs = layers.Dense(num_classes, activation='softmax')(x)
+
+    model = models.Model(inputs=base_model.input, outputs=outputs)
+    return model
+
