@@ -216,3 +216,155 @@ history_vgg19 = vgg19_model.fit(
 test_loss_vgg19, test_acc_vgg19 = vgg19_model.evaluate(test_generator)
 print("VGG19 Test Accuracy:", test_acc_vgg19)
 
+################################################################################
+# 7. COMPARE RESULTS
+################################################################################
+
+print("\nFinal Results:")
+print(f"VGG16 Test Accuracy: {test_acc_vgg16:.4f}")
+print(f"VGG19 Test Accuracy: {test_acc_vgg19:.4f}")
+
+################################################################################
+# 8. OPTIONAL: CONFUSION MATRIX & CLASSIFICATION REPORT
+################################################################################
+from sklearn.metrics import confusion_matrix, classification_report
+
+# Predict classes for VGG16
+preds_vgg16 = vgg16_model.predict(test_generator)
+pred_classes_vgg16 = np.argmax(preds_vgg16, axis=1)
+true_classes = y_test  # Use the original test labels
+
+cm_vgg16 = confusion_matrix(true_classes, pred_classes_vgg16)
+print("\n=== VGG16 Confusion Matrix ===")
+print(cm_vgg16)
+
+print("\n=== VGG16 Classification Report ===")
+print(classification_report(true_classes, pred_classes_vgg16, target_names=["Benign", "Malignant", "Normal"]))
+
+# Predict classes for VGG19
+preds_vgg19 = vgg19_model.predict(test_generator)
+pred_classes_vgg19 = np.argmax(preds_vgg19, axis=1)
+
+cm_vgg19 = confusion_matrix(true_classes, pred_classes_vgg19)
+print("\n=== VGG19 Confusion Matrix ===")
+print(cm_vgg19)
+
+print("\n=== VGG19 Classification Report ===")
+print(classification_report(true_classes, pred_classes_vgg19, target_names=["Benign", "Malignant", "Normal"]))
+
+import matplotlib.pyplot as plt
+import json
+import numpy as np
+from sklearn.metrics import confusion_matrix
+
+# --- VGG16: Visualization & Save ---
+# 1) Evaluate
+eval_loss16, eval_acc16 = vgg16_model.evaluate(test_generator, verbose=0)
+
+# 2) Predictions & Confusion Matrix
+preds16 = np.argmax(vgg16_model.predict(test_generator), axis=1)
+cm16    = confusion_matrix(y_test, preds16)
+
+# 3) Training History
+epochs16     = range(1, len(history_vgg16.history['accuracy']) + 1)
+train_acc16  = history_vgg16.history['accuracy']
+val_acc16    = history_vgg16.history['val_accuracy']
+train_loss16 = history_vgg16.history['loss']
+val_loss16   = history_vgg16.history['val_loss']
+
+# 4) Plot 1×2 faceted figure
+fig16, (ax_cm16, ax_perf16) = plt.subplots(1, 2, figsize=(14, 6))
+
+# Confusion Matrix
+im16 = ax_cm16.imshow(cm16, interpolation='nearest', cmap='Blues')
+ax_cm16.set_title('VGG16 Confusion Matrix')
+ax_cm16.set_xlabel('Predicted')
+ax_cm16.set_ylabel('True')
+for i in range(cm16.shape[0]):
+    for j in range(cm16.shape[1]):
+        ax_cm16.text(j, i, cm16[i, j], ha='center', va='center')
+fig16.colorbar(im16, ax=ax_cm16)
+
+# Performance Curves
+ax_perf16.plot(epochs16, train_acc16,   '-o', label='Train Acc')
+ax_perf16.plot(epochs16, val_acc16,     '--x', label='Val Acc')
+ax_perf16.plot(epochs16, train_loss16,  ':s', label='Train Loss')
+ax_perf16.plot(epochs16, val_loss16,    '-.d', label='Val Loss')
+ax_perf16.set_title('VGG16 Training History')
+ax_perf16.set_xlabel('Epoch')
+ax_perf16.legend(loc='best')
+ax_perf16.grid(True)
+
+plt.tight_layout()
+plt.savefig('vgg16_results.png', dpi=300)
+plt.show()
+
+# 5) Save VGG16 metrics
+vgg16_metrics = {
+    'VGG16': {
+        'loss': float(eval_loss16),
+        'accuracy': float(eval_acc16)
+    }
+}
+with open('vgg16_evaluation.json', 'w') as f:
+    json.dump(vgg16_metrics, f, indent=2)
+
+print("Saved VGG16 plot to vgg16_results.png")
+print("Saved VGG16 evaluation to vgg16_evaluation.json")
+
+
+
+# --- VGG19: Visualization & Save ---
+# 1) Evaluate
+eval_loss19, eval_acc19 = vgg19_model.evaluate(test_generator, verbose=0)
+
+# 2) Predictions & Confusion Matrix
+preds19 = np.argmax(vgg19_model.predict(test_generator), axis=1)
+cm19    = confusion_matrix(y_test, preds19)
+
+# 3) Training History
+epochs19     = range(1, len(history_vgg19.history['accuracy']) + 1)
+train_acc19  = history_vgg19.history['accuracy']
+val_acc19    = history_vgg19.history['val_accuracy']
+train_loss19 = history_vgg19.history['loss']
+val_loss19   = history_vgg19.history['val_loss']
+
+# 4) Plot 1×2 faceted figure
+fig19, (ax_cm19, ax_perf19) = plt.subplots(1, 2, figsize=(14, 6))
+
+# Confusion Matrix
+im19 = ax_cm19.imshow(cm19, interpolation='nearest', cmap='Blues')
+ax_cm19.set_title('VGG19 Confusion Matrix')
+ax_cm19.set_xlabel('Predicted')
+ax_cm19.set_ylabel('True')
+for i in range(cm19.shape[0]):
+    for j in range(cm19.shape[1]):
+        ax_cm19.text(j, i, cm19[i, j], ha='center', va='center')
+fig19.colorbar(im19, ax=ax_cm19)
+
+# Performance Curves
+ax_perf19.plot(epochs19, train_acc19,   '-o', label='Train Acc')
+ax_perf19.plot(epochs19, val_acc19,     '--x', label='Val Acc')
+ax_perf19.plot(epochs19, train_loss19,  ':s', label='Train Loss')
+ax_perf19.plot(epochs19, val_loss19,    '-.d', label='Val Loss')
+ax_perf19.set_title('VGG19 Training History')
+ax_perf19.set_xlabel('Epoch')
+ax_perf19.legend(loc='best')
+ax_perf19.grid(True)
+
+plt.tight_layout()
+plt.savefig('vgg19_results.png', dpi=300)
+plt.show()
+
+# 5) Save VGG19 metrics
+vgg19_metrics = {
+    'VGG19': {
+        'loss': float(eval_loss19),
+        'accuracy': float(eval_acc19)
+    }
+}
+with open('vgg19_evaluation.json', 'w') as f:
+    json.dump(vgg19_metrics, f, indent=2)
+
+print("Saved VGG19 plot to vgg19_results.png")
+print("Saved VGG19 evaluation to vgg19_evaluation.json")
