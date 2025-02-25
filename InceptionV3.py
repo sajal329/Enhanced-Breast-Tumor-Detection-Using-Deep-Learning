@@ -53,3 +53,54 @@ val_datagen = ImageDataGenerator()
 
 train_gen = train_datagen.flow(X_train, y_train, batch_size=32, shuffle=True)
 val_gen   = val_datagen.flow(  X_val,   y_val,   batch_size=32)
+
+
+# --- 5) BUILD & COMPILE ---
+local_weights = "/kaggle/input/inceptionv3/tensorflow2/default/1/inception_v3_weights_tf_dim_ordering_tf_kernels_notop.h5"
+base = InceptionV3(weights=local_weights, include_top=False, input_shape=(299,299,3))
+for layer in base.layers:
+    layer.trainable = False
+
+x = layers.GlobalAveragePooling2D()(base.output)
+x = layers.Dense(256, activation='relu')(x)
+x = layers.Dropout(0.5)(x)
+out = layers.Dense(3, activation='softmax')(x)
+
+model = models.Model(base.input, out)
+model.compile(optimizer=optimizers.Adam(1e-3),
+              loss='sparse_categorical_crossentropy',
+              metrics=['accuracy'])
+
+# --- 6) CALLBACKS ---
+es  = callbacks.EarlyStopping(    monitor='val_loss', patience=5, restore_best_weights=True)
+rlp = callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=3)
+
+# --- 7) TRAIN HEAD ---
+history_head = model.fit(train_gen, epochs=20, validation_data=val_gen,
+          class_weight=class_weight, callbacks=[es, rlp])
+
+# --- 8) FINE-TUNE MOST LAYERS ---
+for layer in base.layers:
+    layer.trainable = True
+
+model.compile(optimizer=optimizers.Adam(1e-4),
+              loss='sparse_categorical_crossentropy',
+              metrics=['accuracy'])
+
+history_ft = model.fit(train_gen, epochs=20, validation_data=val_gen,
+          class_weight=class_weight, callbacks=[es, rlp])
+
+# --- 9) EVAL & REPORT ---
+test_datagen = ImageDataGenerator()
+test_gen = test_datagen.flow(X_test, y_test, batch_size=32, shuffle=False)
+
+loss, acc = model.evaluate(test_gen)
+print("Test Acc:", acc)
+
+preds = np.argmax(model.predict(test_gen), axis=1)
+print("Confusion Matrix:\n", confusion_matrix(y_test, preds))
+print(classification_report(y_test, preds, target_names=["Benign","Malignant","Normal"]))
+
+import matplotlib.pyplot as plt
+import json
+from sklearn.metrics import confusion_matrix
