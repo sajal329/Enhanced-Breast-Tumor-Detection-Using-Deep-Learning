@@ -104,3 +104,64 @@ print(classification_report(y_test, preds, target_names=["Benign","Malignant","N
 import matplotlib.pyplot as plt
 import json
 from sklearn.metrics import confusion_matrix
+
+# --- after your evaluation step ---
+# preds = np.argmax(model.predict(test_gen), axis=1)
+# loss, acc = model.evaluate(test_gen)
+# y_test is your ground-truth label array
+
+# 1) Compute confusion matrix
+cm = confusion_matrix(y_test, preds)
+
+# 2) Combine your two History objects (head & fine-tune) if you ran model.fit twice:
+# history_head = model.fit(…)
+# history_ft   = model.fit(…)
+acc      = history_head.history['accuracy']    + history_ft.history['accuracy']
+val_acc  = history_head.history['val_accuracy']+ history_ft.history['val_accuracy']
+losses   = history_head.history['loss']        + history_ft.history['loss']
+val_losses = history_head.history['val_loss']  + history_ft.history['val_loss']
+epochs   = range(1, len(acc) + 1)
+
+# 3) Plot in a 1×2 faceted layout
+fig, (ax_cm, ax_perf) = plt.subplots(1, 2, figsize=(14, 6))
+
+# — Confusion Matrix —
+im = ax_cm.imshow(cm, interpolation='nearest')
+ax_cm.set_title('InceptionV3 Confusion Matrix')
+ax_cm.set_xlabel('Predicted')
+ax_cm.set_ylabel('True')
+for i in range(cm.shape[0]):
+    for j in range(cm.shape[1]):
+        ax_cm.text(j, i, cm[i, j], ha='center', va='center')
+fig.colorbar(im, ax=ax_cm)
+
+# — Performance Curves —
+ax_perf.plot(epochs,      acc,        linestyle='-',  marker='o', label='Train Acc')
+ax_perf.plot(epochs,      val_acc,    linestyle='--', marker='x', label='Val Acc')
+ax_perf.plot(epochs,      losses,     linestyle=':',  marker='s', label='Train Loss')
+ax_perf.plot(epochs,      val_losses, linestyle='-.', marker='d', label='Val Loss')
+ax_perf.set_title('InceptionV3 Training History')
+ax_perf.set_xlabel('Epoch')
+ax_perf.legend(loc='best')
+ax_perf.grid(True)
+
+plt.tight_layout()
+plt.savefig('inceptionv3_results.png', dpi=300)
+plt.show()
+
+# 4) Save test‐set metrics for later comparison
+# Re-evaluate or reuse evaluation in fresh variables:
+eval_loss, eval_acc = model.evaluate(test_gen, verbose=0)
+
+eval_metrics = {
+    'InceptionV3': {
+        'loss': float(eval_loss),
+        'accuracy': float(eval_acc)
+    }
+}
+
+with open('inceptionv3_evaluation.json', 'w') as f:
+    json.dump(eval_metrics, f, indent=2)
+
+print("Saved plot to inceptionv3_results.png")
+print("Saved evaluation to inceptionv3_evaluation.json")
