@@ -54,3 +54,28 @@ batch_size = 32
 train_gen = train_datagen.flow(X_train, y_train, batch_size=batch_size, shuffle=True)
 val_gen   = val_datagen.flow(  X_val,   y_val,   batch_size=batch_size, shuffle=False)
 test_gen  = test_datagen.flow( X_test,  y_test,  batch_size=batch_size, shuffle=False)
+# 6) BUILD DenseNet169 BASE (WITH LOCAL WEIGHTS IF NEEDED)
+local_weights_path = "/kaggle/input/densenet169/tensorflow2/default/1/densenet169_weights_tf_dim_ordering_tf_kernels_notop.h5"
+try:
+    base = DenseNet169(weights=local_weights_path, include_top=False, input_shape=(224,224,3))
+except:
+    base = DenseNet169(weights='imagenet', include_top=False, input_shape=(224,224,3))
+
+# Freeze all base layers initially
+for layer in base.layers:
+    layer.trainable = False
+
+# 7) ADD CLASSIFICATION HEAD
+x = layers.GlobalAveragePooling2D()(base.output)
+x = layers.Dense(256, activation='relu')(x)
+x = layers.Dropout(0.5)(x)
+outputs = layers.Dense(3, activation='softmax')(x)
+
+model = models.Model(inputs=base.input, outputs=outputs)
+
+# 8) COMPILE
+model.compile(
+    optimizer=optimizers.Adam(1e-3),
+    loss='sparse_categorical_crossentropy',
+    metrics=['accuracy']
+)
