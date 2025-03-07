@@ -58,3 +58,34 @@ train_gen = train_datagen.flow(X_train, y_train, batch_size=batch_size, shuffle=
 val_gen   = val_datagen.flow(  X_val,   y_val,   batch_size=batch_size, shuffle=False)
 test_gen  = test_datagen.flow( X_test,  y_test,  batch_size=batch_size, shuffle=False)
 
+# 6) BUILD THE InceptionResNetV2 BASE
+# Try loading from internet; if not possible, fall back to your local file
+local_weights = "/kaggle/input/inceptionresnetv2/keras/default/1/inception_resnet_v2_weights_tf_dim_ordering_tf_kernels_notop.h5"
+try:
+    base = InceptionResNetV2(weights=local_weights, include_top=False, input_shape=(299,299,3))
+except:
+    base = InceptionResNetV2(weights='imagenet', include_top=False, input_shape=(299,299,3))
+
+# Freeze all base layers
+for layer in base.layers:
+    layer.trainable = False
+
+# 7) ADD A NEW CLASSIFICATION HEAD
+x = layers.GlobalAveragePooling2D()(base.output)
+x = layers.Dense(256, activation='relu')(x)
+x = layers.Dropout(0.5)(x)
+output = layers.Dense(3, activation='softmax')(x)
+
+model = models.Model(inputs=base.input, outputs=output)
+
+# 8) COMPILE
+model.compile(
+    optimizer=optimizers.Adam(1e-3),
+    loss='sparse_categorical_crossentropy',
+    metrics=['accuracy']
+)
+
+# 9) SET UP CALLBACKS
+es  = callbacks.EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+rlp = callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=3)
+
