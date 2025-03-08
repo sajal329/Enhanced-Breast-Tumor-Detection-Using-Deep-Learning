@@ -89,3 +89,98 @@ model.compile(
 es  = callbacks.EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
 rlp = callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=3)
 
+# 10) TRAIN JUST THE HEAD
+history_head = model.fit(
+    train_gen,
+    validation_data=val_gen,
+    epochs=20,
+    class_weight=class_weight,
+    callbacks=[es, rlp]
+)
+
+# 11) FINE-TUNE ALL LAYERS
+for layer in base.layers:
+    layer.trainable = True
+
+model.compile(
+    optimizer=optimizers.Adam(1e-4),
+    loss='sparse_categorical_crossentropy',
+    metrics=['accuracy']
+)
+
+history_ft = model.fit(
+    train_gen,
+    validation_data=val_gen,
+    epochs=20,
+    class_weight=class_weight,
+    callbacks=[es, rlp]
+)
+
+# 12) EVALUATE & REPORT
+loss, acc = model.evaluate(test_gen)
+print(f"InceptionResNetV2 Test Accuracy: {acc:.4f}")
+
+preds = np.argmax(model.predict(test_gen), axis=1)
+print("Confusion Matrix:\n", confusion_matrix(y_test, preds))
+print("\nClassification Report:\n",
+      classification_report(y_test, preds, target_names=["Benign","Malignant","Normal"]))
+
+import matplotlib.pyplot as plt
+import json
+import numpy as np
+from sklearn.metrics import confusion_matrix
+
+# 1) Evaluate on test set
+eval_loss, eval_acc = model.evaluate(test_gen, verbose=0)
+print(f"Test Loss: {eval_loss:.4f}, Test Accuracy: {eval_acc:.4f}")
+
+# 2) Predictions and confusion matrix
+preds = np.argmax(model.predict(test_gen), axis=1)
+cm = confusion_matrix(y_test, preds)
+
+# 3) Combine training histories (assuming you captured these)
+train_acc   = history_head.history['accuracy']    + history_ft.history['accuracy']
+val_acc     = history_head.history['val_accuracy']+ history_ft.history['val_accuracy']
+train_loss  = history_head.history['loss']        + history_ft.history['loss']
+val_loss    = history_head.history['val_loss']    + history_ft.history['val_loss']
+epochs      = range(1, len(train_acc) + 1)
+
+# 4) Plot confusion matrix & performance curves in a 1×2 faceted layout
+fig, (ax_cm, ax_perf) = plt.subplots(1, 2, figsize=(16, 6))
+
+# — Confusion Matrix —
+im = ax_cm.imshow(cm, interpolation='nearest', cmap='Blues')
+ax_cm.set_title('InceptionResNetV2 Confusion Matrix')
+ax_cm.set_xlabel('Predicted')
+ax_cm.set_ylabel('True')
+for i in range(cm.shape[0]):
+    for j in range(cm.shape[1]):
+        ax_cm.text(j, i, cm[i, j], ha='center', va='center')
+fig.colorbar(im, ax=ax_cm)
+
+# — Training History —
+ax_perf.plot(epochs, train_acc,   '-o', label='Train Acc')
+ax_perf.plot(epochs, val_acc,     '--x', label='Val Acc')
+ax_perf.plot(epochs, train_loss,  ':s', label='Train Loss')
+ax_perf.plot(epochs, val_loss,    '-.d', label='Val Loss')
+ax_perf.set_title('InceptionResNetV2 Training History')
+ax_perf.set_xlabel('Epoch')
+ax_perf.legend(loc='best')
+ax_perf.grid(True)
+
+plt.tight_layout()
+plt.savefig('inceptionresnetv2_results.png', dpi=300)
+plt.show()
+
+# 5) Save evaluation metrics for later comparison
+eval_metrics = {
+    'InceptionResNetV2': {
+        'loss': float(eval_loss),
+        'accuracy': float(eval_acc)
+    }
+}
+with open('inceptionresnetv2_evaluation.json', 'w') as f:
+    json.dump(eval_metrics, f, indent=2)
+
+print("Saved plot to inceptionresnetv2_results.png")
+print("Saved evaluation to inceptionresnetv2_evaluation.json")
