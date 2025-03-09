@@ -72,3 +72,22 @@ gen_train = ImageDataGenerator(
 ).flow(X_train, y_train, batch_size=BATCH_SIZE, shuffle=True, seed=SEED)
 gen_val = ImageDataGenerator().flow(X_val, y_val, batch_size=BATCH_SIZE, shuffle=False)
 
+# Model builder
+def build_model(input_shape, num_classes):
+    base = VGG16(weights='imagenet', include_top=False, input_shape=input_shape)
+    for layer in base.layers[:-4]:  # freeze except last 4
+        layer.trainable = False
+    x = layers.Flatten()(base.output)
+    x = layers.Dense(256, activation='relu')(x)
+    x = layers.Dropout(0.5)(x)
+    outputs = layers.Dense(num_classes, activation='softmax', dtype='float32')(x)
+    return models.Model(inputs=base.input, outputs=outputs)
+
+# Build and compile
+model = build_model((IMAGE_SIZE[0], IMAGE_SIZE[1], 3), NUM_CLASSES)
+model.compile(
+    optimizer=optimizers.Adam(learning_rate=1e-4),
+    loss='sparse_categorical_crossentropy',
+    metrics=['accuracy']
+)
+model.summary()
