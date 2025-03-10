@@ -91,3 +91,85 @@ model.compile(
     metrics=['accuracy']
 )
 model.summary()
+
+# Callbacks
+cb = [
+    callbacks.EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True),
+    callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, min_lr=1e-6),
+    callbacks.ModelCheckpoint('best_vgg16.keras', save_best_only=True)
+]
+
+# Train
+history = model.fit(
+    gen_train,
+    epochs=EPOCHS,
+    validation_data=gen_val,
+    callbacks=cb
+)
+
+# Evaluate on test set
+gen_test = ImageDataGenerator().flow(X_test, y_test, batch_size=BATCH_SIZE, shuffle=False)
+loss, acc = model.evaluate(gen_test)
+print(f"Test Loss: {loss:.4f}, Test Acc: {acc:.4f}")
+
+# Predict & metrics
+y_pred = np.argmax(model.predict(gen_test), axis=1)
+cm = confusion_matrix(y_test, y_pred)
+print("Confusion Matrix:\n", cm)
+print("Classification Report:\n", classification_report(y_test, y_pred, target_names=list(LABELS.keys())))
+
+# Plots
+epochs_range = range(1, len(history.history['loss']) + 1)
+plt.figure(figsize=(12, 5))
+plt.subplot(1, 2, 1)
+plt.plot(epochs_range, history.history['accuracy'], '-o', label='Train Acc')
+plt.plot(epochs_range, history.history['val_accuracy'], '--x', label='Val Acc')
+plt.title('Accuracy'); plt.xlabel('Epoch'); plt.legend()
+
+plt.subplot(1, 2, 2)
+plt.plot(epochs_range, history.history['loss'], '-o', label='Train Loss')
+plt.plot(epochs_range, history.history['val_loss'], '--x', label='Val Loss')
+plt.title('Loss'); plt.xlabel('Epoch'); plt.legend()
+plt.tight_layout()
+plt.savefig('performance_16.png', dpi=300)
+plt.show()
+
+plt.figure(figsize=(6, 6))
+plt.imshow(cm, cmap='Blues', interpolation='nearest')
+plt.title('Confusion Matrix'); plt.xlabel('Predicted'); plt.ylabel('True')
+for i in range(cm.shape[0]):
+    for j in range(cm.shape[1]):
+        plt.text(j, i, cm[i, j], ha='center', va='center')
+plt.colorbar(); plt.tight_layout()
+plt.savefig('confusion_matrix_16.png', dpi=300)
+plt.show()
+
+# -------------------------
+# SAVE MATRICES
+# -------------------------
+import numpy as np
+import json
+from sklearn.metrics import confusion_matrix, classification_report
+
+# 1) Compute predictions and metrics
+y_pred = np.argmax(model.predict(gen_test), axis=1)
+cm = confusion_matrix(y_test, y_pred)
+report = classification_report(
+    y_test, 
+    y_pred, 
+    target_names=list(LABELS.keys()), 
+    output_dict=True
+)
+
+# 2) Save to disk
+#   - confusion matrix as a .npy
+#   - both cm and report in one JSON
+np.save('confusion_matrix_vgg16.npy', cm)
+
+with open('results_vgg16.json', 'w') as f:
+    json.dump({
+        'confusion_matrix': cm.tolist(),
+        'classification_report': report
+    }, f, indent=2)
+
+print("Saved cm → confusion_matrix.npy and values → results.json")
