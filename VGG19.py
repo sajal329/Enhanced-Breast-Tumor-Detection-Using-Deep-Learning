@@ -51,3 +51,45 @@ def load_images(base_path):
 # Load data
 X, y = load_images(BASE_PATH)
 print(f"Loaded {len(X)} images with shape {X.shape[1:]}.")
+
+# --- SPLIT DATA ---
+X_trainval, X_test, y_trainval, y_test = train_test_split(
+    X, y, test_size=0.15, stratify=y, random_state=SEED
+)
+X_train, X_val, y_train, y_val = train_test_split(
+    X_trainval, y_trainval, test_size=0.15, stratify=y_trainval, random_state=SEED
+)
+print(f"Train: {len(X_train)}, Val: {len(X_val)}, Test: {len(X_test)}")
+
+# --- DATA AUGMENTATION ---
+train_datagen = ImageDataGenerator(
+    rotation_range=15,
+    width_shift_range=0.1,
+    height_shift_range=0.1,
+    zoom_range=0.15,
+    horizontal_flip=True,
+    fill_mode='nearest'
+)
+val_datagen = ImageDataGenerator()
+
+gen_train = train_datagen.flow(X_train, y_train, batch_size=BATCH_SIZE, shuffle=True, seed=SEED)
+gen_val   = val_datagen.flow(  X_val,   y_val,   batch_size=BATCH_SIZE, shuffle=False)
+
+# --- BUILD MODEL ---
+def build_model(input_shape, num_classes):
+    base = VGG19(weights='imagenet', include_top=False, input_shape=input_shape)
+    for layer in base.layers[:-4]:
+        layer.trainable = False
+    x = layers.Flatten()(base.output)
+    x = layers.Dense(256, activation='relu')(x)
+    x = layers.Dropout(0.5)(x)
+    outputs = layers.Dense(num_classes, activation='softmax', dtype='float32')(x)
+    return models.Model(inputs=base.input, outputs=outputs)
+
+model = build_model((IMAGE_SIZE[0], IMAGE_SIZE[1], 3), NUM_CLASSES)
+model.compile(
+    optimizer=optimizers.Adam(learning_rate=1e-4),
+    loss='sparse_categorical_crossentropy',
+    metrics=['accuracy']
+)
+model.summary()
