@@ -92,3 +92,35 @@ test_aug = ImageDataGenerator()
 gen_train = train_aug.flow(X_train, y_train, batch_size=BATCH_SIZE, shuffle=True, seed=SEED)
 gen_val   = val_aug.flow(X_val,   y_val,   batch_size=BATCH_SIZE, shuffle=False)
 gen_test  = test_aug.flow(X_test,  y_test,  batch_size=BATCH_SIZE, shuffle=False)
+
+# -------------------------
+# 7) BUILD MODEL
+# -------------------------
+def build_inception(input_shape, num_classes):
+    base = InceptionV3(weights='imagenet', include_top=False, input_shape=input_shape)
+    # freeze all layers initially
+    for layer in base.layers:
+        layer.trainable = False
+    x = layers.GlobalAveragePooling2D()(base.output)
+    x = layers.Dense(512, activation='relu')(x)
+    x = layers.Dropout(0.5)(x)
+    out = layers.Dense(num_classes, activation='softmax')(x)
+    model = models.Model(inputs=base.input, outputs=out)
+    return model
+
+model = build_inception((IMAGE_SIZE[0], IMAGE_SIZE[1], 3), NUM_CLASSES)
+model.compile(
+    optimizer=optimizers.Adam(learning_rate=1e-3),
+    loss='sparse_categorical_crossentropy',
+    metrics=['accuracy']
+)
+model.summary()
+
+# -------------------------
+# 8) CALLBACKS
+# -------------------------
+callbacks_list = [
+    callbacks.EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True),
+    callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.3, patience=2, min_lr=1e-6)
+]
+
