@@ -55,3 +55,40 @@ def load_and_preprocess(path):
 
 X, y = load_and_preprocess(BASE_PATH)
 print(f"Loaded data: {X.shape}, Labels: {np.unique(y, return_counts=True)}")
+
+# -------------------------
+# 4) SPLIT
+# -------------------------
+X_trainval, X_test, y_trainval, y_test = train_test_split(
+    X, y, test_size=0.15, stratify=y, random_state=SEED
+)
+X_train, X_val, y_train, y_val = train_test_split(
+    X_trainval, y_trainval, test_size=0.15, stratify=y_trainval, random_state=SEED
+)
+print(f"Train: {len(X_train)}, Val: {len(X_val)}, Test: {len(X_test)}")
+
+# -------------------------
+# 5) CLASS WEIGHTS
+# -------------------------
+cw = compute_class_weight('balanced', classes=np.unique(y_train), y=y_train)
+class_weight = dict(enumerate(cw))
+print(f"Class weights: {class_weight}")
+
+# -------------------------
+# 6) AUGMENTATION + GENERATORS
+# -------------------------
+train_aug = ImageDataGenerator(
+    rotation_range=30,
+    width_shift_range=0.2,
+    height_shift_range=0.2,
+    shear_range=0.2,
+    zoom_range=0.2,
+    horizontal_flip=True,
+    brightness_range=[0.7, 1.3]
+)
+val_aug = ImageDataGenerator()
+test_aug = ImageDataGenerator()
+
+gen_train = train_aug.flow(X_train, y_train, batch_size=BATCH_SIZE, shuffle=True, seed=SEED)
+gen_val   = val_aug.flow(X_val,   y_val,   batch_size=BATCH_SIZE, shuffle=False)
+gen_test  = test_aug.flow(X_test,  y_test,  batch_size=BATCH_SIZE, shuffle=False)
