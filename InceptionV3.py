@@ -124,3 +124,45 @@ callbacks_list = [
     callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.3, patience=2, min_lr=1e-6)
 ]
 
+# -------------------------
+# 9) TRAIN HEAD
+# -------------------------
+history_head = model.fit(
+    gen_train,
+    epochs=EPOCHS_HEAD,
+    validation_data=gen_val,
+    class_weight=class_weight,
+    callbacks=callbacks_list
+)
+
+# -------------------------
+# 10) FINE-TUNE LAST INCEPTION BLOCK
+# -------------------------
+# unfreeze last 2 inception blocks
+for layer in model.layers:
+    if 'mixed10' in layer.name or 'mixed9' in layer.name:
+        layer.trainable = True
+
+model.compile(
+    optimizer=optimizers.Adam(learning_rate=1e-4),
+    loss='sparse_categorical_crossentropy',
+    metrics=['accuracy']
+)
+history_ft = model.fit(
+    gen_train,
+    epochs=EPOCHS_TUNE,
+    validation_data=gen_val,
+    class_weight=class_weight,
+    callbacks=callbacks_list
+)
+
+# -------------------------
+# 11) EVALUATION
+# -------------------------
+loss, acc = model.evaluate(gen_test)
+print(f"Test Loss: {loss:.4f}, Test Acc: {acc:.4f}")
+
+y_pred = np.argmax(model.predict(gen_test), axis=1)
+cm = confusion_matrix(y_test, y_pred)
+print("Confusion Matrix:\n", cm)
+print("Classification Report:\n", classification_report(y_test, y_pred, target_names=list(LABEL_MAP.keys())))
