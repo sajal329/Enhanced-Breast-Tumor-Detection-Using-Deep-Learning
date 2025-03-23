@@ -254,3 +254,60 @@ with open('results_incceptionV3.json', 'w') as f:
     }, f, indent=2)
 
 print("Saved cm → confusion_matrix.npy and values → results.json")
+
+
+##
+##
+# --- 1) PERFORMANCE PLOT: Accuracy & Loss ---
+acc_all      = history_head.history['accuracy']    + history_ft.history['accuracy']
+val_acc_all  = history_head.history['val_accuracy']+ history_ft.history['val_accuracy']
+loss_all     = history_head.history['loss']        + history_ft.history['loss']
+val_loss_all = history_head.history['val_loss']    + history_ft.history['val_loss']
+epochs_range = range(1, len(acc_all) + 1)
+
+# -------------------------
+# Performance curves
+# -------------------------
+epochs = range(1, len(acc_all) + 1)
+
+plt.figure(figsize=(12, 5))
+
+# Accuracy subplot
+plt.subplot(1, 2, 1)
+plt.plot(epochs, acc_all,     '-o', label='Train Acc')
+plt.plot(epochs, val_acc_all, '--x', label='Val Acc')
+plt.title('Accuracy')
+plt.xlabel('Epoch')
+plt.legend()
+
+# Loss subplot
+plt.subplot(1, 2, 2)
+plt.plot(epochs, loss_all,    '-o', label='Train Loss')
+plt.plot(epochs, val_loss_all,'--x', label='Val Loss')
+plt.title('Loss')
+plt.xlabel('Epoch')
+plt.legend()
+
+plt.tight_layout()
+plt.savefig('inceptionv3_performance.png', dpi=300)
+plt.show()
+
+
+# -------------------------
+# Confusion matrix heatmap
+# -------------------------
+plt.figure(figsize=(6, 6))
+plt.imshow(cm, cmap='Blues', interpolation='nearest')
+plt.title('Confusion Matrix')
+plt.xlabel('Predicted')
+plt.ylabel('True')
+
+# Annotate cells
+for i in range(cm.shape[0]):
+    for j in range(cm.shape[1]):
+        plt.text(j, i, cm[i, j], ha='center', va='center')
+
+plt.colorbar()
+plt.tight_layout()
+plt.savefig('inceptionv3_confusion.png', dpi=300)
+plt.show()
