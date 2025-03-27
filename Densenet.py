@@ -98,3 +98,47 @@ test_aug = ImageDataGenerator()
 gen_train = train_aug.flow(X_train, y_train, batch_size=BATCH_SIZE, shuffle=True, seed=SEED)
 gen_val   = val_aug.flow(X_val,   y_val,   batch_size=BATCH_SIZE, shuffle=False)
 gen_test  = test_aug.flow(X_test,  y_test,  batch_size=BATCH_SIZE, shuffle=False)
+
+# -------------------------
+# 7) BUILD DenseNet169 MODEL
+# -------------------------
+local_weights = "/kaggle/input/densenet169/tensorflow2/default/1/densenet169_weights_tf_dim_ordering_tf_kernels_notop.h5"
+try:
+    base = DenseNet169(weights='imagenet', include_top=False, input_shape=(224,224,3))
+except:
+    base = DenseNet169(weights=local_weights, include_top=False, input_shape=(224,224,3))
+# Freeze base
+for layer in base.layers:
+    layer.trainable = False
+
+x = layers.GlobalAveragePooling2D()(base.output)
+x = layers.Dense(512, activation='relu')(x)
+x = layers.Dropout(0.5)(x)
+out = layers.Dense(NUM_CLASSES, activation='softmax')(x)
+model = models.Model(inputs=base.input, outputs=out)
+
+model.compile(
+    optimizer=optimizers.Adam(learning_rate=1e-3),
+    loss='sparse_categorical_crossentropy',
+    metrics=['accuracy']
+)
+model.summary()
+
+# -------------------------
+# 8) CALLBACKS
+# -------------------------
+cb = [
+    callbacks.EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True),
+    callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.3, patience=2, min_lr=1e-6)
+]
+
+# -------------------------
+# 9) TRAIN HEAD
+# -------------------------
+history_head = model.fit(
+    gen_train,
+    epochs=EPOCHS_HEAD,
+    validation_data=gen_val,
+    class_weight=class_weight,
+    callbacks=cb
+)
