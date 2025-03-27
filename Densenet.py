@@ -142,3 +142,114 @@ history_head = model.fit(
     class_weight=class_weight,
     callbacks=cb
 )
+
+# -------------------------
+# 10) FINE-TUNE LAST BLOCKS
+# -------------------------
+# Unfreeze last 50 layers
+for layer in base.layers[-50:]:
+    layer.trainable = True
+
+model.compile(
+    optimizer=optimizers.Adam(learning_rate=1e-4),
+    loss='sparse_categorical_crossentropy',
+    metrics=['accuracy']
+)
+history_ft = model.fit(
+    gen_train,
+    epochs=EPOCHS_TUNE,
+    validation_data=gen_val,
+    class_weight=class_weight,
+    callbacks=cb
+)
+
+# -------------------------
+# 11) EVALUATION
+# -------------------------
+loss, acc = model.evaluate(gen_test)
+print(f"DenseNet169 Test Loss: {loss:.4f}, Test Acc: {acc:.4f}")
+
+preds = np.argmax(model.predict(gen_test), axis=1)
+cm = confusion_matrix(y_test, preds)
+print("Confusion Matrix:\n", cm)
+print("Classification Report:\n", classification_report(y_test, preds, target_names=list(LABEL_MAP.keys())))
+
+# -------------------------
+# 12) PLOTTING RESULTS (separated figures)
+# -------------------------
+train_acc   = history_head.history['accuracy']    + history_ft.history['accuracy']
+val_acc     = history_head.history['val_accuracy']+ history_ft.history['val_accuracy']
+train_loss  = history_head.history['loss']        + history_ft.history['loss']
+val_loss    = history_head.history['val_loss']    + history_ft.history['val_loss']
+epochs_all  = range(1, len(train_acc) + 1)
+
+# --- Performance curves figure ---
+plt.figure(figsize=(12, 5))
+
+# Accuracy subplot
+plt.subplot(1, 2, 1)
+plt.plot(epochs_all, train_acc, '-o', label='Train Acc')
+plt.plot(epochs_all, val_acc,   '--x', label='Val Acc')
+plt.title('Accuracy')
+plt.xlabel('Epoch')
+plt.legend()
+
+# Loss subplot
+plt.subplot(1, 2, 2)
+plt.plot(epochs_all, train_loss, '-o', label='Train Loss')
+plt.plot(epochs_all, val_loss,   '--x', label='Val Loss')
+plt.title('Loss')
+plt.xlabel('Epoch')
+plt.legend()
+
+plt.tight_layout()
+plt.savefig('densenet169_performance.png', dpi=300)
+plt.show()
+
+
+# --- Confusion matrix figure ---
+plt.figure(figsize=(6, 6))
+plt.imshow(cm, cmap='Blues', interpolation='nearest')
+plt.title('DenseNet169 Confusion Matrix')
+plt.xlabel('Predicted')
+plt.ylabel('True')
+
+# Annotate each cell
+for i in range(cm.shape[0]):
+    for j in range(cm.shape[1]):
+        plt.text(j, i, cm[i, j], ha='center', va='center')
+
+plt.colorbar()
+plt.tight_layout()
+plt.savefig('densenet169_confusion.png', dpi=300)
+plt.show()
+
+# -------------------------
+# 13) SAVE EVALUATION METRICS
+# -------------------------
+import numpy as np
+import json
+from sklearn.metrics import confusion_matrix, classification_report
+
+# 1) Compute predictions and metrics
+preds = np.argmax(model.predict(gen_test), axis=1)
+cm = confusion_matrix(y_test, preds)
+report = classification_report(
+    y_test, 
+    preds, 
+    target_names=list(LABELS.keys()), 
+    output_dict=True
+)
+
+# 2) Save to disk
+#   - confusion matrix as a .npy
+#   - both cm and report in one JSON
+np.save('confusion_matrix_densenet169.npy', cm)
+
+with open('results_densenet169.json', 'w') as f:
+    json.dump({
+        'confusion_matrix': cm.tolist(),
+        'classification_report': report
+    }, f, indent=2)
+
+print("Saved cm → confusion_matrix.npy and values → results.json")
