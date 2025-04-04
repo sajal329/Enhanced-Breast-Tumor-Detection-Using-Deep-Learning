@@ -1,186 +1,135 @@
+import os, random, json
 import numpy as np
 import cv2
-from sklearn.model_selection    import train_test_split
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
 from sklearn.utils.class_weight import compute_class_weight
-from sklearn.metrics           import confusion_matrix, classification_report
-
+from sklearn.metrics import confusion_matrix, classification_report
 import tensorflow as tf
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from tensorflow.keras.applications        import InceptionResNetV2, inception_resnet_v2
+from tensorflow.keras.applications import InceptionResNetV2, inception_resnet_v2
 from tensorflow.keras import layers, models, optimizers, callbacks
 
-# 1) PREPROCESS FUNCTION FOR InceptionResNetV2 (299×299 + 3-channel + correct normalization)
-def preprocess_ir2(img):
-    # Resize from original (e.g. 500×500) → 299×299
-    img299 = cv2.resize(img, (299, 299))
-    # Grayscale → 3-channel
-    if img299.ndim == 2:
-        img299 = np.stack([img299]*3, axis=-1)
-    # Apply InceptionResNetV2’s own preprocessing
-    return inception_resnet_v2.preprocess_input(img299.astype(np.float32))
+# -------------------------
+# 1) REPRODUCIBILITY SETUP
+# -------------------------
+SEED = 42
+os.environ['PYTHONHASHSEED'] = str(SEED)
+random.seed(SEED)
+np.random.seed(SEED)
 
-# 2) BUILD THE DATA ARRAYS
-label_map = {'benign': 0, 'malignant': 1, 'normal': 2}
-X_ir2, y_ir2 = [], []
-for label, pairs in data.items():
-    for img, _ in pairs:
-        X_ir2.append(preprocess_ir2(img))
-        y_ir2.append(label_map[label])
-X_ir2 = np.array(X_ir2)
-y_ir2 = np.array(y_ir2)
+def set_tf_seed(seed=SEED):
+    tf.random.set_seed(seed)
+    os.environ['TF_CUDNN_DETERMINISM'] = '1'
+set_tf_seed()
 
-# 3) SPLIT INTO TRAIN / VAL / TEST
+# -------------------------
+# 2) SETTINGS
+# -------------------------
+BASE_PATH    = "/kaggle/input/breast-ultrasound-images-dataset/Dataset_BUSI_with_GT"
+IMAGE_SIZE   = (299, 299)
+BATCH_SIZE   = 16
+EPOCHS_HEAD  = 15
+EPOCHS_TUNE  = 30
+NUM_CLASSES  = 3
+LABEL_MAP    = {'benign': 0, 'malignant': 1, 'normal': 2}
+
+# -------------------------
+# 3) DATA LOADING + PREPROCESSING
+# -------------------------
+def load_and_preprocess(path):
+    X, y = [], []
+    for label, idx in LABEL_MAP.items():
+        folder = os.path.join(path, label)
+        if not os.path.isdir(folder): continue
+        for fname in os.listdir(folder):
+            if not fname.endswith('.png') or '_mask' in fname:
+                continue
+            img = cv2.imread(os.path.join(folder, fname), cv2.IMREAD_GRAYSCALE)
+            if img is None: continue
+            img = cv2.resize(img, IMAGE_SIZE)
+            img = np.stack([img]*3, axis=-1)
+            img = inception_resnet_v2.preprocess_input(img.astype(np.float32))
+            X.append(img)
+            y.append(idx)
+    return np.array(X), np.array(y)
+
+X, y = load_and_preprocess(BASE_PATH)
+print(f"Loaded {X.shape[0]} samples, image shape {X.shape[1:]}.")
+
+# -------------------------
+# 4) SPLIT DATA
+# -------------------------
 X_trval, X_test, y_trval, y_test = train_test_split(
-    X_ir2, y_ir2, test_size=0.15, stratify=y_ir2, random_state=42
+    X, y, test_size=0.15, stratify=y, random_state=SEED
 )
 X_train, X_val, y_train, y_val = train_test_split(
-    X_trval, y_trval, test_size=0.15, stratify=y_trval, random_state=42
+    X_trval, y_trval, test_size=0.15, stratify=y_trval, random_state=SEED
 )
+print(f"Train: {len(X_train)}, Val: {len(X_val)}, Test: {len(X_test)}")
 
-# 4) COMPUTE CLASS WEIGHTS
+# -------------------------
+# 5) CLASS WEIGHTS
+# -------------------------
 cw = compute_class_weight('balanced', classes=np.unique(y_train), y=y_train)
 class_weight = dict(enumerate(cw))
+print(f"Class weights: {class_weight}")
 
-# 5) DATA AUGMENTATION & GENERATORS
-train_datagen = ImageDataGenerator(
-    rotation_range=20,
-    width_shift_range=0.1,
-    height_shift_range=0.1,
+# -------------------------
+# 6) AUGMENTATION + GENERATORS
+# -------------------------
+train_aug = ImageDataGenerator(
+    rotation_range=30,
+    width_shift_range=0.2,
+    height_shift_range=0.2,
     zoom_range=0.2,
     horizontal_flip=True,
-    fill_mode='nearest'
+    brightness_range=[0.7,1.3]
 )
-val_datagen  = ImageDataGenerator()
-test_datagen = ImageDataGenerator()
+val_aug = ImageDataGenerator()
+test_aug = ImageDataGenerator()
 
-batch_size = 32
-train_gen = train_datagen.flow(X_train, y_train, batch_size=batch_size, shuffle=True)
-val_gen   = val_datagen.flow(  X_val,   y_val,   batch_size=batch_size, shuffle=False)
-test_gen  = test_datagen.flow( X_test,  y_test,  batch_size=batch_size, shuffle=False)
+gen_train = train_aug.flow(X_train, y_train, batch_size=BATCH_SIZE, shuffle=True, seed=SEED)
+gen_val   = val_aug.flow(X_val,   y_val,   batch_size=BATCH_SIZE, shuffle=False)
+gen_test  = test_aug.flow(X_test,  y_test,  batch_size=BATCH_SIZE, shuffle=False)
 
-# 6) BUILD THE InceptionResNetV2 BASE
-# Try loading from internet; if not possible, fall back to your local file
-local_weights = "/kaggle/input/inceptionresnetv2/keras/default/1/inception_resnet_v2_weights_tf_dim_ordering_tf_kernels_notop.h5"
-try:
-    base = InceptionResNetV2(weights=local_weights, include_top=False, input_shape=(299,299,3))
-except:
-    base = InceptionResNetV2(weights='imagenet', include_top=False, input_shape=(299,299,3))
-
-# Freeze all base layers
+# -------------------------
+# 7) BUILD InceptionResNetV2 MODEL
+# -------------------------
+# Use imagenet weights
+base = InceptionResNetV2(weights='imagenet', include_top=False, input_shape=(299,299,3))
+# Freeze all layers initially
 for layer in base.layers:
     layer.trainable = False
 
-# 7) ADD A NEW CLASSIFICATION HEAD
 x = layers.GlobalAveragePooling2D()(base.output)
-x = layers.Dense(256, activation='relu')(x)
+x = layers.Dense(512, activation='relu')(x)
 x = layers.Dropout(0.5)(x)
-output = layers.Dense(3, activation='softmax')(x)
+out = layers.Dense(NUM_CLASSES, activation='softmax')(x)
+model = models.Model(inputs=base.input, outputs=out)
 
-model = models.Model(inputs=base.input, outputs=output)
-
-# 8) COMPILE
 model.compile(
-    optimizer=optimizers.Adam(1e-3),
+    optimizer=optimizers.Adam(learning_rate=1e-3),
     loss='sparse_categorical_crossentropy',
     metrics=['accuracy']
 )
+model.summary()
 
-# 9) SET UP CALLBACKS
-es  = callbacks.EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
-rlp = callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=3)
+# -------------------------
+# 8) CALLBACKS
+# -------------------------
+cb_list = [
+    callbacks.EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True),
+    callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.3, patience=2, min_lr=1e-6)
+]
 
-# 10) TRAIN JUST THE HEAD
-history_head = model.fit(
-    train_gen,
-    validation_data=val_gen,
-    epochs=20,
+# -------------------------
+# 9) TRAIN HEAD
+# -------------------------
+hist_head = model.fit(
+    gen_train,
+    epochs=EPOCHS_HEAD,
+    validation_data=gen_val,
     class_weight=class_weight,
-    callbacks=[es, rlp]
+    callbacks=cb_list
 )
-
-# 11) FINE-TUNE ALL LAYERS
-for layer in base.layers:
-    layer.trainable = True
-
-model.compile(
-    optimizer=optimizers.Adam(1e-4),
-    loss='sparse_categorical_crossentropy',
-    metrics=['accuracy']
-)
-
-history_ft = model.fit(
-    train_gen,
-    validation_data=val_gen,
-    epochs=20,
-    class_weight=class_weight,
-    callbacks=[es, rlp]
-)
-
-# 12) EVALUATE & REPORT
-loss, acc = model.evaluate(test_gen)
-print(f"InceptionResNetV2 Test Accuracy: {acc:.4f}")
-
-preds = np.argmax(model.predict(test_gen), axis=1)
-print("Confusion Matrix:\n", confusion_matrix(y_test, preds))
-print("\nClassification Report:\n",
-      classification_report(y_test, preds, target_names=["Benign","Malignant","Normal"]))
-
-import matplotlib.pyplot as plt
-import json
-import numpy as np
-from sklearn.metrics import confusion_matrix
-
-# 1) Evaluate on test set
-eval_loss, eval_acc = model.evaluate(test_gen, verbose=0)
-print(f"Test Loss: {eval_loss:.4f}, Test Accuracy: {eval_acc:.4f}")
-
-# 2) Predictions and confusion matrix
-preds = np.argmax(model.predict(test_gen), axis=1)
-cm = confusion_matrix(y_test, preds)
-
-# 3) Combine training histories (assuming you captured these)
-train_acc   = history_head.history['accuracy']    + history_ft.history['accuracy']
-val_acc     = history_head.history['val_accuracy']+ history_ft.history['val_accuracy']
-train_loss  = history_head.history['loss']        + history_ft.history['loss']
-val_loss    = history_head.history['val_loss']    + history_ft.history['val_loss']
-epochs      = range(1, len(train_acc) + 1)
-
-# 4) Plot confusion matrix & performance curves in a 1×2 faceted layout
-fig, (ax_cm, ax_perf) = plt.subplots(1, 2, figsize=(16, 6))
-
-# — Confusion Matrix —
-im = ax_cm.imshow(cm, interpolation='nearest', cmap='Blues')
-ax_cm.set_title('InceptionResNetV2 Confusion Matrix')
-ax_cm.set_xlabel('Predicted')
-ax_cm.set_ylabel('True')
-for i in range(cm.shape[0]):
-    for j in range(cm.shape[1]):
-        ax_cm.text(j, i, cm[i, j], ha='center', va='center')
-fig.colorbar(im, ax=ax_cm)
-
-# — Training History —
-ax_perf.plot(epochs, train_acc,   '-o', label='Train Acc')
-ax_perf.plot(epochs, val_acc,     '--x', label='Val Acc')
-ax_perf.plot(epochs, train_loss,  ':s', label='Train Loss')
-ax_perf.plot(epochs, val_loss,    '-.d', label='Val Loss')
-ax_perf.set_title('InceptionResNetV2 Training History')
-ax_perf.set_xlabel('Epoch')
-ax_perf.legend(loc='best')
-ax_perf.grid(True)
-
-plt.tight_layout()
-plt.savefig('inceptionresnetv2_results.png', dpi=300)
-plt.show()
-
-# 5) Save evaluation metrics for later comparison
-eval_metrics = {
-    'InceptionResNetV2': {
-        'loss': float(eval_loss),
-        'accuracy': float(eval_acc)
-    }
-}
-with open('inceptionresnetv2_evaluation.json', 'w') as f:
-    json.dump(eval_metrics, f, indent=2)
-
-print("Saved plot to inceptionresnetv2_results.png")
-print("Saved evaluation to inceptionresnetv2_evaluation.json")
