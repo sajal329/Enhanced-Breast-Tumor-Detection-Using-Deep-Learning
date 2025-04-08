@@ -133,3 +133,117 @@ hist_head = model.fit(
     class_weight=class_weight,
     callbacks=cb_list
 )
+
+# -------------------------
+# 10) FINE-TUNE LAST BLOCKS
+# -------------------------
+# Unfreeze last 2 inception blocks
+for layer in base.layers:
+    if 'conv_7b' in layer.name or 'conv_6b' in layer.name:
+        layer.trainable = True
+
+# Recompile with lower LR
+tf.keras.backend.clear_session()
+model.compile(
+    optimizer=optimizers.Adam(learning_rate=1e-4),
+    loss='sparse_categorical_crossentropy',
+    metrics=['accuracy']
+)
+set_tf_seed()
+hist_ft = model.fit(
+    gen_train,
+    epochs=EPOCHS_TUNE,
+    validation_data=gen_val,
+    class_weight=class_weight,
+    callbacks=cb_list
+)
+
+# -------------------------
+# 11) EVALUATION
+# -------------------------
+eval_loss, eval_acc = model.evaluate(gen_test)
+print(f"Test Loss: {eval_loss:.4f}, Test Acc: {eval_acc:.4f}")
+
+preds = np.argmax(model.predict(gen_test), axis=1)
+cm = confusion_matrix(y_test, preds)
+print("Confusion Matrix:\n", cm)
+print("Classification Report:\n", classification_report(y_test, preds, target_names=list(LABEL_MAP.keys())))
+
+# -------------------------
+# 12) PLOTTING
+# -------------------------
+train_acc   = hist_head.history['accuracy']    + hist_ft.history['accuracy']
+val_acc     = hist_head.history['val_accuracy']+ hist_ft.history['val_accuracy']
+train_loss  = hist_head.history['loss']        + hist_ft.history['loss']
+val_loss    = hist_head.history['val_loss']    + hist_ft.history['val_loss']
+epochs_all  = range(1, len(train_acc) + 1)
+
+# --- Performance curves ---
+plt.figure(figsize=(12, 5))
+
+# Accuracy subplot
+plt.subplot(1, 2, 1)
+plt.plot(epochs_all, train_acc, '-o', label='Train Acc')
+plt.plot(epochs_all, val_acc,   '--x', label='Val Acc')
+plt.title('Accuracy')
+plt.xlabel('Epoch')
+plt.legend()
+
+# Loss subplot
+plt.subplot(1, 2, 2)
+plt.plot(epochs_all, train_loss, '-o', label='Train Loss')
+plt.plot(epochs_all, val_loss,   '--x', label='Val Loss')
+plt.title('Loss')
+plt.xlabel('Epoch')
+plt.legend()
+
+plt.tight_layout()
+plt.savefig('ir2_performance.png', dpi=300)
+plt.show()
+
+
+# --- Confusion matrix heatmap ---
+plt.figure(figsize=(6, 6))
+plt.imshow(cm, cmap='Blues', interpolation='nearest')
+plt.title('InceptionResNetV2 Confusion Matrix')
+plt.xlabel('Predicted')
+plt.ylabel('True')
+
+for i in range(cm.shape[0]):
+    for j in range(cm.shape[1]):
+        plt.text(j, i, cm[i, j], ha='center', va='center')
+
+plt.colorbar()
+plt.tight_layout()
+plt.savefig('ir2_confusion.png', dpi=300)
+plt.show()
+
+# -------------------------
+# 13) SAVE METRICS
+# -------------------------
+import numpy as np
+import json
+from sklearn.metrics import confusion_matrix, classification_report
+
+# 1) Compute predictions and metrics
+preds = np.argmax(model.predict(gen_test), axis=1)
+cm = confusion_matrix(y_test, preds)
+report = classification_report(
+    y_test, 
+    preds, 
+    target_names=list(LABELS.keys()), 
+    output_dict=True
+)
+
+# 2) Save to disk
+#   - confusion matrix as a .npy
+#   - both cm and report in one JSON
+np.save('confusion_matrix.npy', cm)
+
+with open('results.json', 'w') as f:
+    json.dump({
+        'confusion_matrix': cm.tolist(),
+        'classification_report': report
+    }, f, indent=2)
+
+print("Saved cm → confusion_matrix.npy and values → results.json")
