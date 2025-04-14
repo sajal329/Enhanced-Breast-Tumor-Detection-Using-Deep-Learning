@@ -1,117 +1,123 @@
 import json
-import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
 # 1) Map model names to JSON filenames
 model_files = {
-    'VGG16':           'results_vgg16.json',
-    'VGG19':           'results_vgg19.json',
-    'InceptionV3':     'results_inceptionV3.json',
-    'DenseNet169':     'results_densenet169.json',
+    'VGG16':            'results_vgg16.json',
+    'VGG19':            'results_vgg19.json',
+    'InceptionV3':      'results_inceptionV3.json',
+    'DenseNet169':      'results_densenet169.json',
     'InceptionResNetV2':'results.json'
 }
 
-# 2) Load all results
-results = {}
-for name, fname in model_files.items():
-    with open(fname, 'r') as f:
-        results[name] = json.load(f);
+# 2) Load results
+results = {m: json.load(open(f)) for m, f in model_files.items()}
 
 # 3) Build DataFrames
-# Overall accuracy
-accuracy = pd.Series({m: r['classification_report']['accuracy']
+accuracy = pd.Series({m: r['classification_report']['accuracy'] 
                       for m, r in results.items()})
-
-# Macro-avg metrics
-macro = pd.DataFrame({
-    m: r['classification_report']['macro avg']
-    for m, r in results.items()
-}).T
-
-# Weighted-avg metrics
-weighted = pd.DataFrame({
-    m: r['classification_report']['weighted avg']
-    for m, r in results.items()
-}).T
-
-# Per-class F1
-classes = ['benign', 'malignant', 'normal']
-f1_per_class = pd.DataFrame({
-    m: [results[m]['classification_report'][cls]['f1-score']
-         for cls in classes]
+weighted = pd.DataFrame({m: r['classification_report']['weighted avg'] 
+                         for m, r in results.items()}).T
+macro    = pd.DataFrame({m: r['classification_report']['macro avg'] 
+                         for m, r in results.items()}).T
+classes = ['benign','malignant','normal']
+f1_pc = pd.DataFrame({
+    m: [results[m]['classification_report'][cls]['f1-score'] for cls in classes]
     for m in results
 }, index=classes).T
-
 models = list(results.keys())
 
-# === 1) Line plot: Accuracy vs Macro metrics ===
-plt.figure(figsize=(12, 5))
-plt.plot(models, accuracy,     '-o', label='Accuracy')
-plt.plot(models, macro['precision'], '--x', label='Macro Precision')
-plt.plot(models, macro['recall'],    '--x', label='Macro Recall')
-plt.plot(models, macro['f1-score'],  '--x', label='Macro F1-score')
-plt.title('Overall Accuracy & Macro-averaged Metrics')
-plt.ylabel('Score')
-plt.xlabel('Model')
+# === 1) Line plot: Accuracy vs Weighted F1 ===
+plt.figure(figsize=(12,5))
+x = np.arange(len(models))
+acc_vals = accuracy.values
+wf1_vals = weighted['f1-score'].values
+
+plt.plot(x, acc_vals, '-o', label='Accuracy', linewidth=2)
+plt.fill_between(x, acc_vals-0.01, acc_vals+0.01, alpha=0.1)
+plt.plot(x, wf1_vals, '--x', label='Weighted F1-Score', linewidth=2)
+plt.fill_between(x, wf1_vals-0.01, wf1_vals+0.01, alpha=0.1)
+
+# annotate peaks
+for xi, y in zip(x, acc_vals):
+    plt.text(xi, y+0.005, f"{y:.2f}", ha='center')
+for xi, y in zip(x, wf1_vals):
+    plt.text(xi, y-0.015, f"{y:.2f}", ha='center')
+
+plt.xticks(x, models)
+plt.title('Accuracy vs. Weighted F1-Score', fontsize=14)
+plt.ylabel('Score', fontsize=12)
+plt.ylim(0,1)
+plt.grid(alpha=0.3)
 plt.legend()
 plt.tight_layout()
-plt.savefig('accuracy_vs_macro.png')
+plt.savefig('accuracy_vs_weightedF1.png', dpi=300)
+plt.savefig('accuracy_vs_weightedF1.svg')
 plt.show()
 
 # === 2) Radar chart: Macro Precision/Recall/F1 ===
-labels = ['precision', 'recall', 'f1-score']
-angles = np.linspace(0, 2*np.pi, len(labels), endpoint=False).tolist()
-angles += angles[:1]  # close the loop
+labels = ['precision','recall','f1-score']
+N = len(labels)
+angles = np.linspace(0, 2*np.pi, N, endpoint=False).tolist()
+angles += angles[:1]
 
-fig = plt.figure(figsize=(6, 6))
+fig = plt.figure(figsize=(6,6))
 ax = fig.add_subplot(111, polar=True)
 for m in models:
     vals = macro.loc[m, labels].tolist()
     vals += vals[:1]
-    ax.plot(angles, vals, '-o', label=m)
-ax.set_thetagrids(np.degrees(angles), labels + [labels[0]])
-ax.set_title('Macro Metrics Radar Chart', y=1.1)
-ax.legend(loc='lower right', bbox_to_anchor=(1.3, 0.0))
+    ax.plot(angles, vals, '-o', linewidth=1.5, label=m)
+    ax.fill(angles, vals, alpha=0.1)
+
+ax.set_xticks(angles[:-1])
+ax.set_xticklabels(labels, fontsize=11)
+ax.set_yticks([0.5,0.75,1.0])
+ax.set_title('Macro-averaged Metrics Radar', y=1.1, fontsize=14)
+ax.legend(bbox_to_anchor=(1.3,0.0), fontsize=8)
 plt.tight_layout()
-plt.savefig('macro_radar.png')
+plt.savefig('macro_radar.png', dpi=300)
+plt.savefig('macro_radar.svg')
 plt.show()
 
 # === 3) Grouped bar chart: Weighted-average metrics ===
 ind = np.arange(len(models))
-width = 0.25
+w = 0.25
 
-fig, ax = plt.subplots(figsize=(10, 6))
-ax.bar(ind,               weighted['precision'], width, label='Precision')
-ax.bar(ind + width,       weighted['recall'],    width, label='Recall')
-ax.bar(ind + 2*width,     weighted['f1-score'],  width, label='F1-score')
+fig, ax = plt.subplots(figsize=(10,6))
+ax.bar(ind,               weighted['precision'], w, label='Precision')
+ax.bar(ind + w,           weighted['recall'],    w, label='Recall')
+ax.bar(ind + 2*w,         weighted['f1-score'],  w, label='F1-Score')
 
-ax.set_xticks(ind + width)
+ax.set_xticks(ind + w)
 ax.set_xticklabels(models)
-ax.set_title('Weighted-average Metrics by Model')
-ax.set_ylabel('Score')
+ax.set_title('Weighted-Average Metrics by Model', fontsize=14)
+ax.set_ylabel('Score', fontsize=12)
+ax.set_ylim(0,1)
 ax.legend()
+plt.grid(axis='y', alpha=0.3)
 plt.tight_layout()
-plt.savefig('weighted_metrics_grouped.png')
+plt.savefig('weighted_metrics_grouped.png', dpi=300)
+plt.savefig('weighted_metrics_grouped.svg')
 plt.show()
 
 # === 4) Grouped bar chart: Per-class F1-scores ===
 ind = np.arange(len(classes))
-width = 0.15
+w = 0.15
 
-fig, ax = plt.subplots(figsize=(10, 6))
+fig, ax = plt.subplots(figsize=(10,6))
 for i, m in enumerate(models):
-    ax.bar(ind + i*width,
-           f1_per_class.loc[m],
-           width,
-           label=m)
+    ax.bar(ind + i*w, f1_pc.loc[m], w, label=m)
 
-ax.set_xticks(ind + width*(len(models)-1)/2)
+ax.set_xticks(ind + w*(len(models)-1)/2)
 ax.set_xticklabels(classes)
-ax.set_title('Per-Class F1-Score Comparison')
-ax.set_ylabel('F1-score')
+ax.set_title('Per-Class F1-Score Comparison', fontsize=14)
+ax.set_ylabel('F1-Score', fontsize=12)
+ax.set_ylim(0,1)
 ax.legend()
+plt.grid(axis='y', alpha=0.3)
 plt.tight_layout()
-plt.savefig('per_class_f1_grouped.png')
+plt.savefig('per_class_f1_grouped.png', dpi=300)
+plt.savefig('per_class_f1_grouped.svg')
 plt.show()
