@@ -121,3 +121,63 @@ plt.tight_layout()
 plt.savefig('per_class_f1_grouped.png', dpi=300)
 plt.savefig('per_class_f1_grouped.svg')
 plt.show()
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# === Concentric radial bar chart: Per-class F1 Scores ===
+# classes & models should already be defined:
+#   classes = ['benign', 'malignant', 'normal']
+#   models = ['VGG16', 'VGG19', 'InceptionV3', 'DenseNet169', 'InceptionResNetV2']
+#   f1_per_class: DataFrame indexed by model, columns=classes
+
+num_models  = len(models)
+num_classes = len(classes)
+
+# Radii for each class ring
+radii = np.arange(1, num_classes + 1) * 1.5
+bar_width = 2 * np.pi / num_models * 0.8
+angles    = np.linspace(0, 2*np.pi, num_models, endpoint=False)
+
+# Pick a qualitative colormap for distinct model colors
+colors = plt.cm.tab10(np.linspace(0, 1, num_models))
+
+fig = plt.figure(figsize=(8, 8))
+ax  = fig.add_subplot(111, polar=True)
+
+for i, cls in enumerate(classes):
+    r = radii[i]
+    vals = [f1_per_class.loc[m, cls] for m in models]
+    for j, (angle, val) in enumerate(zip(angles, vals)):
+        ax.bar(angle, val,
+               width=bar_width,
+               bottom=r,
+               color=colors[j],
+               edgecolor='white',
+               linewidth=0.8)
+        # Annotate each bar tip
+        ax.text(angle, r + val + 0.05, f"{val:.2f}",
+                ha='center', va='bottom', fontsize=9)
+
+# Tidy up
+ax.set_yticks(radii)
+ax.set_yticklabels(classes, fontsize=11)   # ring labels = classes
+ax.set_xticks([])                          # hide angle ticks
+ax.set_ylim(0, radii[-1] + 1)
+ax.grid(False)
+ax.spines['polar'].set_visible(False)
+
+# Legend for models
+handles = [plt.Line2D([0], [0], color=colors[i], lw=4) 
+           for i in range(num_models)]
+ax.legend(handles, models,
+          loc='upper right',
+          bbox_to_anchor=(1.3, 1.05),
+          fontsize=9)
+
+ax.set_title('Per-Class F1 Scores Across Models', y=1.08, fontsize=14)
+
+plt.tight_layout()
+plt.savefig('concentric_radial_f1.png', dpi=300)
+plt.savefig('concentric_radial_f1.svg')
+plt.show()
