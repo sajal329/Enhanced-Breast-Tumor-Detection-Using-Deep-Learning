@@ -58,27 +58,42 @@ plt.savefig('accuracy_vs_weightedF1.svg')
 plt.show()
 
 # === 2) Radar chart: Macro Precision/Recall/F1 ===
-labels = ['precision','recall','f1-score']
-N = len(labels)
-angles = np.linspace(0, 2*np.pi, N, endpoint=False).tolist()
+# === Radar chart: Models as axes, Per-class F1 across models (Clean + Zoomed) ===
+labels = models  # the model names on the circle
+angles = np.linspace(0, 2*np.pi, len(labels), endpoint=False).tolist()
 angles += angles[:1]
 
-fig = plt.figure(figsize=(6,6))
+fig = plt.figure(figsize=(6, 6))
 ax = fig.add_subplot(111, polar=True)
-for m in models:
-    vals = macro.loc[m, labels].tolist()
-    vals += vals[:1]
-    ax.plot(angles, vals, '-o', linewidth=1.5, label=m)
-    ax.fill(angles, vals, alpha=0.1)
 
+# For each class, plot its F1 across all models
+for cls in ['benign', 'malignant', 'normal']:
+    vals = [f1_per_class.loc[m, cls] for m in models]
+    vals += vals[:1]
+    ax.plot(angles, vals, '-o', label=cls.capitalize(), linewidth=1)
+    # optional fill for emphasis:
+    # ax.fill(angles, vals, alpha=0.1)
+
+# Only show radial gridlines at key F1 thresholds
+ax.set_rgrids([0.5, 0.7, 0.9], angle=45)
+ax.set_ylim(0.45, 1.0)
+
+# Clean up background & spine
+ax.grid(color='gray', linestyle='--', linewidth=0.5)
+ax.patch.set_alpha(0)
+ax.spines['polar'].set_visible(False)
+
+# Angular labels = models
 ax.set_xticks(angles[:-1])
 ax.set_xticklabels(labels, fontsize=11)
-ax.set_yticks([0.5,0.75,1.0])
-ax.set_title('Macro-averaged Metrics Radar', y=1.1, fontsize=14)
-ax.legend(bbox_to_anchor=(1.3,0.0), fontsize=8)
+
+# Title & legend
+ax.set_title('Per-Class F1 Across Models', y=1.08, fontsize=14)
+ax.legend(loc='lower right', bbox_to_anchor=(1.3, 0.0), fontsize=8)
+
 plt.tight_layout()
-plt.savefig('macro_radar.png', dpi=300)
-plt.savefig('macro_radar.svg')
+plt.savefig('f1_per_class_across_models_radar.png', dpi=300)
+plt.savefig('f1_per_class_across_models_radar.svg')
 plt.show()
 
 # === 3) Grouped bar chart: Weighted-average metrics ===
