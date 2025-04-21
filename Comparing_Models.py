@@ -60,3 +60,35 @@ plt.tight_layout()
 plt.savefig('accuracy_vs_macro.png')
 plt.savefig('accuracy_vs_macro.svg')
 plt.show()
+
+# === 2) Weighted-average metrics: Grouped bar chart ===
+labels = ['precision', 'recall', 'f1-score']
+metrics = weighted[labels]
+
+ind   = np.arange(len(models))
+width = 0.25
+
+fig, ax = plt.subplots(figsize=(10,6))
+for i, metric in enumerate(labels):
+    ax.bar(ind + i*width,
+           metrics[metric],
+           width,
+           label=metric.capitalize())
+
+# X-axis ticks & labels
+ax.set_xticks(ind + width)
+ax.set_xticklabels(models, fontsize=11)
+
+# Titles & limits
+ax.set_title('Weighted-Average Metrics by Model', fontsize=14)
+ax.set_ylabel('Score', fontsize=12)
+ax.set_ylim(0, 1.0)
+
+# Grid & legend
+ax.grid(axis='y', linestyle='--', alpha=0.3)
+ax.legend(loc='upper right', fontsize=10)
+
+plt.tight_layout()
+plt.savefig('weighted_metrics_bar_clean.png', dpi=300)
+plt.savefig('weighted_metrics_bar_clean.svg')
+plt.show()
