@@ -61,34 +61,38 @@ plt.savefig('accuracy_vs_macro.png')
 plt.savefig('accuracy_vs_macro.svg')
 plt.show()
 
-# === 2) Weighted-average metrics: Grouped bar chart ===
-labels = ['precision', 'recall', 'f1-score']
-metrics = weighted[labels]
+# 2) Pairwise McNemar’s test
+pvals = pd.DataFrame(index=models, columns=models, dtype=float)
+bs_counts = pd.DataFrame(index=models, columns=models, dtype=int)  # b
+cs_counts = pd.DataFrame(index=models, columns=models, dtype=int)  # c
 
-ind   = np.arange(len(models))
-width = 0.25
+for A, B in itertools.permutations(models, 2):
+    corrA = (y_preds[A] == y_true)
+    corrB = (y_preds[B] == y_true)
+    b = np.sum(corrA & ~corrB)
+    c = np.sum(~corrA & corrB)
+    table = [[0, b],
+             [c, 0]]
+    res = mcnemar(table, exact=True)
+    pvals.loc[A, B] = res.pvalue
+    bs_counts.loc[A, B] = b
+    cs_counts.loc[A, B] = c
 
-fig, ax = plt.subplots(figsize=(10,6))
-for i, metric in enumerate(labels):
-    ax.bar(ind + i*width,
-           metrics[metric],
-           width,
-           label=metric.capitalize())
-
-# X-axis ticks & labels
-ax.set_xticks(ind + width)
-ax.set_xticklabels(models, fontsize=11)
-
-# Titles & limits
-ax.set_title('Weighted-Average Metrics by Model', fontsize=14)
-ax.set_ylabel('Score', fontsize=12)
-ax.set_ylim(0, 1.0)
-
-# Grid & legend
-ax.grid(axis='y', linestyle='--', alpha=0.3)
-ax.legend(loc='upper right', fontsize=10)
-
+# 3) Visualize the p-value matrix
+fig, ax = plt.subplots(figsize=(8,6))
+im = ax.imshow(pvals.astype(float), cmap='Reds', vmin=0, vmax=1)
+# Annotate
+for i, A in enumerate(models):
+    for j, B in enumerate(models):
+        if i!=j:
+            txt = f"{pvals.loc[A,B]:.3f}"
+            ax.text(j, i, txt, ha='center', va='center', color='black')
+# Labels
+ax.set_xticks(np.arange(len(models))); ax.set_xticklabels(models, rotation=45, ha='right')
+ax.set_yticks(np.arange(len(models))); ax.set_yticklabels(models)
+ax.set_title("McNemar’s Test p-values (A vs B)")
+fig.colorbar(im, ax=ax, label='p-value')
 plt.tight_layout()
-plt.savefig('weighted_metrics_bar_clean.png', dpi=300)
-plt.savefig('weighted_metrics_bar_clean.svg')
+plt.savefig('mcnemar_pvalues_heatmap.png', dpi=300)
 plt.show()
+
