@@ -130,3 +130,53 @@ plt.tight_layout()
 plt.savefig('per_class_f1_radar_clean.png', dpi=300)
 plt.savefig('per_class_f1_radar_clean.svg')
 plt.show()
+
+# === 4) Radar chart: Models as axes, Per-class Precision across models (Clean + Zoomed) ===
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+
+# Assuming you already have:
+#   models           = ['VGG16', 'VGG19', 'InceptionV3', 'DenseNet169', 'InceptionResNetV2']
+#   results          = {...}  # your loaded JSON dict
+#   classes          = ['benign', 'malignant', 'normal']
+
+# 1) Build the per-class Precision DataFrame
+precision_per_class = pd.DataFrame({
+    m: [ results[m]['classification_report'][cls]['recall'] for cls in classes ]
+    for m in models
+}, index=classes).T
+
+# 2) Compute angles for the radar
+labels = models
+angles = np.linspace(0, 2*np.pi, len(labels), endpoint=False).tolist()
+angles += angles[:1]
+
+# 3) Plot
+fig = plt.figure(figsize=(6, 6))
+ax  = fig.add_subplot(111, polar=True)
+
+for cls in classes:
+    vals = precision_per_class.loc[:, cls].tolist()
+    vals += vals[:1]
+    ax.plot(angles, vals, '-o', label=cls.capitalize(), linewidth=1)
+    # optional fill:
+    # ax.fill(angles, vals, alpha=0.1)
+
+# 4) Styling: zoom & clean
+ax.set_rgrids([0.5, 0.7, 0.9], angle=45)
+ax.set_ylim(0.45, 1.0)
+ax.grid(color='gray', linestyle='--', linewidth=0.5)
+ax.patch.set_alpha(0)
+ax.spines['polar'].set_visible(False)
+
+# 5) Labels, title, legend
+ax.set_xticks(angles[:-1])
+ax.set_xticklabels(labels, fontsize=11)
+ax.set_title('Per-Class Recall Across Models', y=1.08, fontsize=14)
+ax.legend(loc='lower right', bbox_to_anchor=(1.3, 0.0), fontsize=8)
+
+plt.tight_layout()
+plt.savefig('recall_per_class_across_models_radar.png', dpi=300)
+plt.savefig('recall_per_class_across_models_radar.svg')
+plt.show()
